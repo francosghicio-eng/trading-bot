@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 TELEGRAM_TOKEN  = os.environ.get("TELEGRAM_TOKEN", "")
 TWELVEDATA_KEY  = os.environ.get("TWELVEDATA_KEY", "")
 CHAT_ID         = os.environ.get("CHAT_ID", "351600461")
+CHAT_ID_2 = os.environ.get("CHAT_ID_2", "1069316516")
 
 CAPITALE        = float(os.environ.get("CAPITALE", "500"))
 RISCHIO_PERC    = float(os.environ.get("RISCHIO_PERC", "4"))   # % rischio per trade
@@ -54,14 +55,16 @@ def invia_messaggio(testo: str) -> bool:
         log.warning("TELEGRAM_TOKEN non impostato")
         return False
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": testo, "parse_mode": "HTML"}
-    try:
-        r = requests.post(url, json=payload, timeout=10)
-        r.raise_for_status()
-        return True
-    except Exception as e:
-        log.error(f"Errore invio Telegram: {e}")
-        return False
+    destinatari = [CHAT_ID]
+    if CHAT_ID_2:
+        destinatari.append(CHAT_ID_2)
+    for chat in destinatari:
+        payload = {"chat_id": chat, "text": testo, "parse_mode": "HTML"}
+        try:
+            requests.post(url, json=payload, timeout=10)
+        except Exception as e:
+            log.error(f"Errore invio a {chat}: {e}")
+    return True
 
 # ── TWELVE DATA ───────────────────────────────────────────────────────────────
 def get_prezzi(symbol: str, interval: str = "1h", outputsize: int = 50):
