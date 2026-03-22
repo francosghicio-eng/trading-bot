@@ -313,20 +313,16 @@ def msg_avvio() -> str:
     )
 
 # ── GESTIONE COMANDI TELEGRAM ─────────────────────────────────────────────────
-def get_aggiornamenti(offset: int = 0) -> list:
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
-    try:
-        r = requests.get(url, params={"offset": offset, "timeout": 5}, timeout=10)
-        return r.json().get("result", [])
-    except Exception as e:
-        log.error(f"Errore getUpdates: {e}")
-        return []
-
-def gestisci_comando(testo: str, segnali_correnti: list) -> str | None:
+def gestisci_comando(testo: str, chat_id_mittente: str, segnali_correnti: list) -> tuple[str | None, str | None]:
+    """
+    Restituisce (risposta, destinatario).
+    - risposta: il testo da inviare, o None se nessuna risposta
+    - destinatario: il chat_id a cui rispondere (solo il mittente per comandi personali)
+    """
     testo = testo.strip().lower()
 
     if testo == "/start":
-        return msg_avvio()
+        return msg_avvio(), chat_id_mittente  # solo a chi ha scritto /start
 
     if testo == "/help":
         return (
@@ -340,7 +336,7 @@ def gestisci_comando(testo: str, segnali_correnti: list) -> str | None:
             "/seguo2  → confermi il secondo trade\n"
             "/nessuno → non apri nulla\n\n"
             "Il bot ti avvisa automaticamente quando trova segnali validi."
-        )
+        ), chat_id_mittente
 
     if testo == "/risk":
         p_giorno = round(abs(stato['perdita_giorno']), 2)
@@ -356,10 +352,10 @@ def gestisci_comando(testo: str, segnali_correnti: list) -> str | None:
             f"Perdita totale: –€{p_totale} ({p_totale_perc}% su {MAX_LOSS_TOTALE}% max)\n"
             f"Perdite consecutive: {stato['perdite_consecutive']}\n"
             f"Operatività: {'🚨 BLOCCATA' if stato['bloccato'] else '✅ Attiva'}"
-        )
+        ), chat_id_mittente
 
     if testo == "/today":
-        trade_oggi = [t for t in stato["trade_aperti"]]
+        trade_oggi = stato["trade_aperti"]
         return (
             f"📅 <b>RIEPILOGO GIORNATA</b>\n\n"
             f"💼 Capitale: €{stato['capitale']}\n"
@@ -367,15 +363,15 @@ def gestisci_comando(testo: str, segnali_correnti: list) -> str | None:
             f"Perdita giornaliera: –€{round(abs(stato['perdita_giorno']),2)}\n\n"
             + ("Nessun trade aperto al momento." if not trade_oggi
                else "\n".join(f"• {t['nome']} — ingresso €{t['ingresso']}" for t in trade_oggi))
-        )
+        ), chat_id_mittente
 
     if testo == "/signals":
         if not segnali_correnti:
-            return "📡 Nessun segnale attivo in questo momento. Il bot scansiona ogni ora."
-        return msg_scansione(segnali_correnti)
+            return "📡 Nessun segnale attivo in questo momento. Il bot scansiona ogni ora.", chat_id_mittente
+        return msg_scansione(segnali_correnti), chat_id_mittente
 
     if testo == "/nessuno":
-        return "👍 Ok, nessuna posizione aperta. Il bot continua a monitorare."
+        return "👍 Ok, nessuna posizione aperta. Il bot continua a monitorare.", chat_id_mittente
 
     for i, s in enumerate(segnali_correnti):
         if testo == f"/seguo{i+1}":
@@ -398,9 +394,9 @@ def gestisci_comando(testo: str, segnali_correnti: list) -> str | None:
                 f"📌 Apri ora la posizione sul tuo broker.\n"
                 f"💼 Capitale impegnato: €{s['size']} ({round(s['size']/stato['capitale']*100,1)}%)\n"
                 f"⚠️ Rischio attivo: €{s['rischio_eur']} ({round(s['rischio_eur']/stato['capitale']*100,1)}%)"
-            )
+            ), chat_id_mittente
 
-    return None
+    return None, None
 
 # ── LOOP PRINCIPALE ───────────────────────────────────────────────────────────
 def main():
@@ -418,10 +414,11 @@ def main():
             offset = upd["update_id"] + 1
             msg    = upd.get("message", {})
             testo  = msg.get("text", "")
+            chat_id_mittente = str(msg.get("chat", {}).get("id", CHAT_ID))
             if testo:
-                risposta = gestisci_comando(testo, segnali_correnti)
-                if risposta:
-                    invia_messaggio(risposta)
+                risposta, destinatario = gestisci_comando(testo, chat_id_mittente, segnali_correnti)
+                if risposta and destinatario:
+                    invia_messaggio_a(risposta, destinatario)
 
         # Scansione mercato ogni SCAN_INTERVAL secondi
         ora_attuale = time.time()
@@ -455,7 +452,18 @@ def main():
                     invia_messaggio(msg_scansione(risultati))
                 else:
                     invia_messaggio(msg_nessun_segnale())
-
+def invia_messaggio_a(testo: str, chat_id: str) -> bool:
+    if not TELEGRAM_TOKEN:
+        return False
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {"chat_id": chat_id, "text": testo, "parse_mode": "HTML"}
+    try:
+        r = requests.post(url, json=payload, timeout=10)
+        r.raise_for_status()
+        return True
+    except Exception as e:
+        log.error(f"Errore invio a {chat_id}: {e}")
+        return False
         time.sleep(2)
 
 if __name__ == "__main__":
