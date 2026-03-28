@@ -411,6 +411,35 @@ def msg_blocco(motivo: str) -> str:
         "👉 Non aprire posizioni manualmente."
     )
 
+def genera_recap() -> str:
+    """Genera il riepilogo settimanale."""
+    capitale_attuale  = stato["capitale"]
+    capitale_iniziale = stato["capitale_iniziale"]
+    variazione        = round(capitale_attuale - capitale_iniziale, 2)
+    variazione_perc   = round(variazione / capitale_iniziale * 100, 1)
+    segno             = "+" if variazione >= 0 else ""
+    emoji             = "📈" if variazione >= 0 else "📉"
+
+    trade_aperti = stato["trade_aperti"]
+    perdita_tot  = round(abs(stato["perdita_totale"]), 2)
+
+    linee = [
+        f"📊 <b>RECAP SETTIMANALE</b>\n",
+        f"💼 Capitale attuale: €{capitale_attuale}",
+        f"💼 Capitale iniziale: €{capitale_iniziale}",
+        f"{emoji} Variazione: {segno}€{variazione} ({segno}{variazione_perc}%)",
+        f"📉 Perdita totale accumulata: €{perdita_tot}",
+        f"🔄 Trade ancora aperti: {len(trade_aperti)}",
+    ]
+
+    if trade_aperti:
+        linee.append("\nTrade aperti:")
+        for t in trade_aperti:
+            linee.append(f"  • {t['nome']} {t['segnale']} — ingresso {t['ingresso']} | size €{t['size']}")
+
+    linee.append(f"\n📒 Dettaglio completo su Notion.")
+    return "\n".join(linee)
+
 # ── GESTIONE COMANDI ──────────────────────────────────────────────────────────
 def gestisci_comando(testo: str, chat_id_mittente: str, segnali_correnti: list) -> tuple[str | None, str | None]:
     testo = testo.strip().lower()
@@ -424,6 +453,7 @@ def gestisci_comando(testo: str, chat_id_mittente: str, segnali_correnti: list) 
             "/signals — segnali attivi ora\n"
             "/today   — riepilogo giornata\n"
             "/risk    — stato del rischio\n"
+            "/recap   — riepilogo settimanale\n"
             "/help    — questa guida\n\n"
             "Quando ricevi opportunità:\n"
             "/seguo1  → apro il trade prioritario\n"
@@ -465,6 +495,9 @@ def gestisci_comando(testo: str, chat_id_mittente: str, segnali_correnti: list) 
 
     if testo == "/nessuno":
         return "👍 Ok, nessuna posizione aperta. Il bot continua a monitorare.", chat_id_mittente
+
+    if testo == "/recap":
+        return genera_recap(), chat_id_mittente
 
     for i, s in enumerate(segnali_correnti):
         if testo == f"/seguo{i + 1}":
@@ -516,19 +549,10 @@ def main():
     log.info("Bot avviato")
     invia_messaggio(msg_avvio())
 
-    # Log avvio su Notion
-    notion_log("Avvio bot", {
-        "nome":     "Bot avviato",
-        "asset":    "—",
-        "direzione":"—",
-        "capitale": stato["capitale"],
-        "note":     f"Capitale: €{stato['capitale']} | Trade aperti: {len(stato['trade_aperti'])}",
-    })
-
     offset           = 0
     segnali_correnti = []
     ultima_scansione = 0
-    ultimo_snapshot  = 0
+    ultimo_recap     = 0
 
     while True:
         reset_perdita_giorno()
@@ -574,19 +598,12 @@ def main():
                 else:
                     invia_messaggio(msg_nessun_segnale())
 
-        # 3. Snapshot orario su Notion
-        if time.time() - ultimo_snapshot >= 3600:
-            ultimo_snapshot = time.time()
-            notion_log("Snapshot orario", {
-                "nome":     f"Snapshot — Capitale €{stato['capitale']}",
-                "asset":    "—",
-                "direzione":"—",
-                "capitale": stato["capitale"],
-                "note":     f"Trade aperti: {len(stato['trade_aperti'])} | "
-                            f"Perdita oggi: €{round(abs(stato['perdita_giorno']),2)} | "
-                            f"Perdita totale: €{round(abs(stato['perdita_totale']),2)}",
-            })
-            salva_stato()
+        # 3. Recap settimanale automatico ogni lunedì alle 08:00 UTC
+        now_utc = datetime.now(timezone.utc)
+        if now_utc.weekday() == 0 and now_utc.hour == 7:
+            if time.time() - ultimo_recap >= 86400:
+                ultimo_recap = time.time()
+                invia_messaggio(genera_recap())
 
         time.sleep(2)
 
