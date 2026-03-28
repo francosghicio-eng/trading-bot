@@ -132,29 +132,29 @@ def notion_log(tipo: str, dati: dict) -> None:
     ora = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
     props = {
-        "Nome":     {"title": [{"text": {"content": dati.get("nome", tipo)}}]},
-        "Tipo":     {"select": {"name": tipo}},
-        "Asset":    {"rich_text": [{"text": {"content": dati.get("asset", "")}}]},
-        "Direzione":{"rich_text": [{"text": {"content": dati.get("direzione", "")}}]},
-        "Capitale": {"number": dati.get("capitale", stato["capitale"])},
-        "Data":     {"date": {"start": ora}},
+        "Name":      {"title": [{"text": {"content": dati.get("nome", tipo)}}]},
+        "Tipo":      {"rich_text": [{"text": {"content": tipo}}]},
+        "Asset":     {"rich_text": [{"text": {"content": dati.get("asset", "")}}]},
+        "Direzione": {"rich_text": [{"text": {"content": dati.get("direzione", "")}}]},
+        "Capitale":  {"number": dati.get("capitale", stato["capitale"])},
+        "Data":      {"date": {"start": ora}},
     }
 
     # Campi opzionali
     if "size" in dati:
-        props["Size (EUR)"]    = {"number": dati["size"]}
+        props["Size (EUR)"]      = {"number": dati["size"]}
     if "rischio_eur" in dati:
-        props["Rischio (EUR)"] = {"number": dati["rischio_eur"]}
+        props["Rischio (EUR)"]   = {"number": dati["rischio_eur"]}
     if "ingresso" in dati:
-        props["Ingresso"]      = {"number": dati["ingresso"]}
+        props["Ingresso"]        = {"number": dati["ingresso"]}
     if "stop_loss" in dati:
-        props["Stop Loss"]     = {"number": dati["stop_loss"]}
+        props["Stop Loss"]       = {"number": dati["stop_loss"]}
     if "take_profit" in dati:
-        props["Take Profit"]   = {"number": dati["take_profit"]}
+        props["Take Profit"]     = {"number": dati["take_profit"]}
     if "risultato_eur" in dati:
         props["Risultato (EUR)"] = {"number": dati["risultato_eur"]}
     if "note" in dati:
-        props["Note"] = {"rich_text": [{"text": {"content": dati["note"]}}]}
+        props["Note"]            = {"rich_text": [{"text": {"content": dati["note"]}}]}
 
     payload = {"parent": {"database_id": NOTION_DB_ID}, "properties": props}
     try:
