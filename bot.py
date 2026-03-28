@@ -133,7 +133,7 @@ def notion_log(tipo: str, dati: dict) -> None:
 
     props = {
         "Name":      {"title": [{"text": {"content": dati.get("nome", tipo)}}]},
-        "Tipo":      {"rich_text": [{"text": {"content": tipo}}]},
+        "Tipo":      {"select": {"name": tipo}},
         "Asset":     {"rich_text": [{"text": {"content": dati.get("asset", "")}}]},
         "Direzione": {"rich_text": [{"text": {"content": dati.get("direzione", "")}}]},
         "Capitale":  {"number": dati.get("capitale", stato["capitale"])},
